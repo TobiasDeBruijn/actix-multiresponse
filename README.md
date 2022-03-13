@@ -27,4 +27,4 @@ async fn responder(payload: Payload<TestPayload>) -> Payload<TestPayload> {
 ```
 
 ## License
-actix-multiresponse is dual licensed under the MIT or the Apache-2.0 license, at your descretion
+actix-multiresponse is dual licensed under the MIT or the Apache-2.0 license, at your discretion
