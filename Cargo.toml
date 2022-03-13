@@ -6,7 +6,7 @@ authors = ["Tobias de Bruijn <t.debruijn@array21.dev>"]
 description = "actix-multiresponse intents to allow supporting multiple response/request data formats depending on the Content-Type and Accept headers"
 readme = "README.md"
 repository = "https://github.com/TobiasDeBruijn/actix-multiresponse"
-license = "MIT or Apache-2.0"
+license = "MIT OR Apache-2.0"
 keywords = ["actix", "protobuf", "json", "serde"]
 categories = ["encoding", "web-programming"]
 
