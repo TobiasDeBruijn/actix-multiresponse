@@ -37,6 +37,9 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 
+#[cfg(feature = "paperclip")]
+use paperclip::actix::Apiv2Schema;
+
 mod error;
 mod headers;
 
@@ -70,6 +73,16 @@ impl<T: serde::Serialize> SerdeSupportSerialize for T {}
 #[cfg(not(any(feature = "json")))]
 impl<T> SerdeSupportSerialize for T {}
 
+#[cfg(feature = "paperclip")]
+pub trait PaperclipSupport: paperclip::actix::Mountable {}
+#[cfg(not(feature = "paperclip"))]
+pub trait PaperclipSupport {}
+
+#[cfg(feature = "paperclip")]
+impl<T: paperclip::actix::Mountable> PaperclipSupport for T {}
+#[cfg(not(feature = "paperclip"))]
+impl<T> PaperclipSupport for T {}
+
 /// Payload wrapper which facilitates tje (de)serialization.
 /// This type can be used as both the request and response payload type.
 ///
@@ -89,6 +102,7 @@ impl<T> SerdeSupportSerialize for T {}
 ///
 /// If during serializing no format is enabled
 #[derive(Debug)]
+#[cfg_attr(feature = "paperclip", derive(Apiv2Schema))]
 pub struct Payload<T: 'static + Default + Clone>(pub T);
 
 impl<T: 'static + Default + Clone> Deref for Payload<T> {
@@ -105,7 +119,7 @@ impl<T: 'static + Default + Clone> DerefMut for Payload<T> {
     }
 }
 
-impl<T: 'static + SerdeSupportDeserialize + ProtobufSupport + Default + Clone> FromRequest
+impl<T: 'static + SerdeSupportDeserialize + ProtobufSupport + PaperclipSupport + Default + Clone> FromRequest
     for Payload<T>
 {
     type Error = PayloadError;
@@ -141,7 +155,7 @@ impl<T: 'static + SerdeSupportDeserialize + ProtobufSupport + Default + Clone> F
     }
 }
 
-impl<T: ProtobufSupport + SerdeSupportSerialize + Default + Clone> Responder for Payload<T> {
+impl<T: ProtobufSupport + SerdeSupportSerialize + Default + Clone + PaperclipSupport> Responder for Payload<T> {
     type Body = BoxBody;
 
     fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
