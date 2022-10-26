@@ -1,6 +1,6 @@
 [package]
 name = "actix-multiresponse"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Tobias de Bruijn <t.debruijn@array21.dev>"]
 description = "actix-multiresponse intents to allow supporting multiple response/request data formats depending on the Content-Type and Accept headers"
@@ -21,7 +21,7 @@ log = "0.4"
 cfg-if = "1.0.0"
 
 [dependencies.actix-protobuf]
-version = "0.8"
+version = "0.9"
 optional = true
 
 [dependencies.serde]
@@ -33,7 +33,7 @@ version = "4.0"
 default-features = false
 
 [dependencies.prost]
-version = "0.10"
+version = "0.11"
 default-features = false
 optional = true
 
@@ -46,12 +46,12 @@ features = ["actix4"]
 [dev-dependencies]
 serde = "1.0"
 serde_derive = "1.0"
-prost-derive = "0.10"
+prost-derive = "0.11"
 actix-macros = "0.2"
 actix-rt = "2.7"
 serde_json = "1.0"
 
 [dev-dependencies.prost]
-version = "0.10"
+version = "0.11"
 default-features = false
 features = ["std"]
