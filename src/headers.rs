@@ -6,6 +6,8 @@ pub enum ContentType {
     Json,
     #[cfg(feature = "protobuf")]
     Protobuf,
+    #[cfg(feature = "xml")]
+    Xml,
     Other,
 }
 
@@ -16,6 +18,8 @@ impl Default for ContentType {
                 Self::Json
             } else if #[cfg(feature = "protobuf")] {
                 Self::Protobuf
+            } else if #[cfg(feature = "xml")] {
+                Self::Xml,
             } else {
                 Self::Other
             }
@@ -49,6 +53,11 @@ impl ContentType {
                     #[cfg(feature = "protobuf")]
                     return Self::Protobuf;
                     #[cfg(not(feature = "protobuf"))]
+                    return Self::Other;
+                } else if l.starts_with("application/xml") || l.starts_with("text/xml") {
+                    #[cfg(feature = "xml")]
+                    return Self::Xml;
+                    #[cfg(not(feature = "xml"))]
                     return Self::Other;
                 } else {
                     return Self::Other;
@@ -113,6 +122,32 @@ mod test {
 
         assert_eq!(
             ContentType::Protobuf,
+            ContentType::from_request_content_type(&req)
+        )
+    }
+
+    #[test]
+    #[cfg(feature = "xml")]
+    fn test_xml() {
+        let req = TestRequest::get()
+            .insert_header(("Content-Type", "application/xml"))
+            .to_http_request();
+
+        assert_eq!(
+            ContentType::Xml,
+            ContentType::from_request_content_type(&req)
+        )
+    }
+
+    #[test]
+    #[cfg(feature = "xml")]
+    fn test_xml_with_charset() {
+        let req = TestRequest::get()
+            .insert_header(("Content-Type", "application/xml; charset=UTF-8"))
+            .to_http_request();
+
+        assert_eq!(
+            ContentType::Xml,
             ContentType::from_request_content_type(&req)
         )
     }

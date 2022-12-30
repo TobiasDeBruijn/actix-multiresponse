@@ -31,14 +31,14 @@ use crate::headers::ContentType;
 
 use actix_web::body::BoxBody;
 use actix_web::{FromRequest, HttpRequest, HttpResponse, Responder};
-use log::trace;
+use actix_web::http::StatusCode;
 
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 
-#[cfg(feature = "paperclip")]
-use paperclip::actix::Apiv2Schema;
+use futures_util::StreamExt;
+use thiserror::Error;
 
 mod error;
 mod headers;
@@ -53,35 +53,25 @@ impl<T: prost::Message> ProtobufSupport for T {}
 #[cfg(not(feature = "protobuf"))]
 impl<T> ProtobufSupport for T {}
 
-#[cfg(any(feature = "json"))]
+#[cfg(any(feature = "json", feature = "xml"))]
 pub trait SerdeSupportDeserialize: serde::de::DeserializeOwned {}
-#[cfg(not(any(feature = "json")))]
+#[cfg(not(any(feature = "json", feature = "xml")))]
 pub trait SerdeSupportDeserialize {}
 
-#[cfg(any(feature = "json"))]
+#[cfg(any(feature = "json", feature = "xml"))]
 impl<T: serde::de::DeserializeOwned> SerdeSupportDeserialize for T {}
-#[cfg(not(any(feature = "json")))]
+#[cfg(not(any(feature = "json", feature = "xml")))]
 impl<T> SerdeSupportDeserialize for T {}
 
-#[cfg(any(feature = "json"))]
+#[cfg(any(feature = "json", feature = "xml"))]
 pub trait SerdeSupportSerialize: serde::Serialize {}
-#[cfg(not(any(feature = "json")))]
+#[cfg(not(any(feature = "json", feature = "xml")))]
 pub trait SerdeSupportSerialize {}
 
-#[cfg(any(feature = "json"))]
+#[cfg(any(feature = "json", feature = "xml"))]
 impl<T: serde::Serialize> SerdeSupportSerialize for T {}
-#[cfg(not(any(feature = "json")))]
+#[cfg(not(any(feature = "json", feature = "xml")))]
 impl<T> SerdeSupportSerialize for T {}
-
-#[cfg(feature = "paperclip")]
-pub trait PaperclipSupport: paperclip::actix::Mountable {}
-#[cfg(not(feature = "paperclip"))]
-pub trait PaperclipSupport {}
-
-#[cfg(feature = "paperclip")]
-impl<T: paperclip::actix::Mountable> PaperclipSupport for T {}
-#[cfg(not(feature = "paperclip"))]
-impl<T> PaperclipSupport for T {}
 
 /// Payload wrapper which facilitates tje (de)serialization.
 /// This type can be used as both the request and response payload type.
@@ -102,7 +92,6 @@ impl<T> PaperclipSupport for T {}
 ///
 /// If during serializing no format is enabled
 #[derive(Debug)]
-#[cfg_attr(feature = "paperclip", derive(Apiv2Schema))]
 pub struct Payload<T: 'static + Default + Clone>(pub T);
 
 impl<T: 'static + Default + Clone> Deref for Payload<T> {
@@ -119,7 +108,7 @@ impl<T: 'static + Default + Clone> DerefMut for Payload<T> {
     }
 }
 
-impl<T: 'static + SerdeSupportDeserialize + ProtobufSupport + PaperclipSupport + Default + Clone> FromRequest
+impl<T: 'static + SerdeSupportDeserialize + ProtobufSupport + Default + Clone> FromRequest
     for Payload<T>
 {
     type Error = PayloadError;
@@ -131,31 +120,24 @@ impl<T: 'static + SerdeSupportDeserialize + ProtobufSupport + PaperclipSupport +
         let mut payload = payload.take();
 
         Box::pin(async move {
-            match ContentType::from_request_content_type(&req) {
-                #[cfg(feature = "json")]
-                ContentType::Json => {
-                    trace!("Received JSON payload, deserializing");
-                    let json: actix_web::web::Json<T> =
-                        actix_web::web::Json::from_request(&req, &mut payload).await?;
-                    Ok(Self(json.clone()))
-                }
-                #[cfg(feature = "protobuf")]
-                ContentType::Protobuf => {
-                    trace!("Received Protobuf payload, deserializing");
-                    let protobuf: actix_protobuf::ProtoBuf<T> =
-                        actix_protobuf::ProtoBuf::from_request(&req, &mut payload).await?;
-                    Ok(Self(protobuf.clone()))
-                }
-                _ => {
-                    trace!("User did not set a valid Content-Type header");
-                    Err(Self::Error::InvalidContentType)
-                }
+            let mut payload_bytes = Vec::new();
+            while let Some(Ok(b)) = payload.next().await {
+                payload_bytes.append(&mut b.to_vec())
             }
+
+            let content_type = ContentType::from_request_content_type(&req);
+            if content_type.eq(&ContentType::Other) {
+                return Err(PayloadError::InvalidContentType)
+            }
+
+            let this = Payload::deserialize(&payload_bytes, content_type)?;
+
+            Ok(this)
         })
     }
 }
 
-impl<T: ProtobufSupport + SerdeSupportSerialize + Default + Clone + PaperclipSupport> Responder for Payload<T> {
+impl<T: ProtobufSupport + SerdeSupportSerialize + Default + Clone> Responder for Payload<T> {
     type Body = BoxBody;
 
     fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
@@ -175,20 +157,107 @@ impl<T: ProtobufSupport + SerdeSupportSerialize + Default + Clone + PaperclipSup
             content_type
         };
 
+        let serialized = match self.serialize(content_type.clone()) {
+            Ok(x) => x,
+            Err(e) => {
+                return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(e.to_string());
+            }
+        };
+
+        let mut response = HttpResponse::build(StatusCode::OK);
+        match content_type {
+            #[cfg(feature = "json")]
+            ContentType::Json => response.insert_header(("Content-Type", "application/json")),
+            #[cfg(feature = "protobuf")]
+            ContentType::Protobuf => response.insert_header(("Content-Type", "application/protobuf")),
+            #[cfg(feature = "xml")]
+            ContentType::Xml => response.insert_header(("Content-Type", "application/xml")),
+            ContentType::Other => panic!("Must have ast least one format feature enabled.")
+        };
+
+        response.body(serialized)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SerializeError {
+    #[cfg(feature = "json")]
+    #[error("Failed to serialize to JSON: {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[cfg(feature = "json")]
+    #[error("Failed to encode to protobuf: {0}")]
+    Prost(String),
+    #[cfg(feature = "xml")]
+    #[error("Failed to serialize to XML: {0}")]
+    QuickXml(#[from] quick_xml::DeError),
+    #[error("Unable to serialize")]
+    Unserializable,
+}
+
+#[derive(Debug, Error)]
+pub enum DeserializeError {
+    #[cfg(feature = "json")]
+    #[error("Failed to deserialize from JSON: {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[cfg(feature = "protobuf")]
+    #[error("Failed to decode from protobuf: {0}")]
+    Prost(String),
+    #[cfg(feature = "xml")]
+    #[error("Failed to deserialize from XML: {0}")]
+    Xml(#[from] quick_xml::DeError),
+    #[error("Unable to deserialize")]
+    Undeserializable
+}
+
+impl<T: ProtobufSupport + SerdeSupportSerialize + Default + Clone> Payload<T> {
+    pub fn serialize(&self, content_type: ContentType) -> Result<Vec<u8>, SerializeError> {
         match content_type {
             #[cfg(feature = "json")]
             ContentType::Json => {
-                let json = actix_web::web::Json(self.0);
-                json.respond_to(req).map_into_boxed_body()
-            }
+                let json = serde_json::to_string_pretty(&self.0)?;
+                Ok(json.into_bytes())
+            },
             #[cfg(feature = "protobuf")]
             ContentType::Protobuf => {
-                let protobuf = actix_protobuf::ProtoBuf(self.0);
-                protobuf.respond_to(req)
+                let mut protobuf = Vec::new();
+                self.0.encode(&mut protobuf)
+                    .map_err(|e| SerializeError::Prost(e.to_string()))?;
+                Ok(protobuf)
+            },
+            #[cfg(feature = "xml")]
+            ContentType::Xml => {
+                let xml = quick_xml::se::to_string(&self.0)?;
+                Ok(xml.into_bytes())
             }
-            ContentType::Other => panic!("Unable to serialize. Content type to use could not be determined. Do you have at least one format enabled?"),
+            ContentType::Other => Err(SerializeError::Unserializable)
         }
     }
+}
+
+impl<T: ProtobufSupport + SerdeSupportDeserialize + Default + Clone> Payload<T> {
+    pub fn deserialize(body: &[u8], content_type: ContentType) -> Result<Self, DeserializeError> {
+        match content_type {
+            #[cfg(feature = "json")]
+            ContentType::Json => {
+                let payload: T = serde_json::from_slice(body)?;
+                Ok(Self(payload))
+            },
+            #[cfg(feature = "protobuf")]
+            ContentType::Protobuf => {
+                let payload = T::decode(body)
+                    .map_err(|e| DeserializeError::Prost(e.to_string()))?;
+                Ok(Self(payload))
+            },
+            #[cfg(feature = "xml")]
+            ContentType::Xml => {
+                let payload: T = quick_xml::de::from_reader(body)?;
+                Ok(Self(payload))
+            }
+            ContentType::Other => Err(DeserializeError::Undeserializable)
+        }
+    }
+
 }
 
 #[cfg(test)]
@@ -208,7 +277,7 @@ mod test {
     impl TestPayload {
         #[allow(unused)]
         fn json() -> String {
-            serde_json::to_string(&Self::default()).unwrap()
+            serde_json::to_string_pretty(&Self::default()).unwrap()
         }
 
         #[allow(unused)]

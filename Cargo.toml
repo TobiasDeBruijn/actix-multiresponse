@@ -1,6 +1,6 @@
 [package]
 name = "actix-multiresponse"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Tobias de Bruijn <t.debruijn@array21.dev>"]
 description = "actix-multiresponse intents to allow supporting multiple response/request data formats depending on the Content-Type and Accept headers"
@@ -12,16 +12,23 @@ categories = ["encoding", "web-programming"]
 
 [features]
 default = ["json", "protobuf"]
-json = ["serde"]
-protobuf = ["prost", "actix-protobuf"]
+json = ["serde", "serde_json"]
+protobuf = ["prost"]
+xml = ["quick-xml", "serde"]
 
 [dependencies]
 thiserror = "1.0"
 log = "0.4"
 cfg-if = "1.0.0"
+futures-util = "0.3.25"
 
-[dependencies.actix-protobuf]
-version = "0.9"
+[dependencies.quick-xml]
+version = "0.27.1"
+optional = true
+features = ["serialize"]
+
+[dependencies.serde_json]
+version = "1"
 optional = true
 
 [dependencies.serde]
@@ -36,12 +43,6 @@ default-features = false
 version = "0.11"
 default-features = false
 optional = true
-
-[dependencies.paperclip]
-version = "0.7.0"
-optional = true
-default-features = false
-features = ["actix4"]
 
 [dev-dependencies]
 serde = "1.0"
