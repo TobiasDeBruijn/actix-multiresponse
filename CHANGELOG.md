@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.2
+- Fix: Documentation
+
 ## 0.4.1
 - Fix: Make `ContentType` pub
 

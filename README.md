@@ -4,8 +4,10 @@ actix-multiresponse intents to allow supporting multiple response/request data f
 ## Supported formats
 - Json
 - Protobuf
+- XML
 
 All formats can be enabled using equally-named feature flags. At least one format should be enabled.
+By default `json` and `protobuf` are enabled.
 
 ## Example
 ```rs

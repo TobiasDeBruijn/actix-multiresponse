@@ -1,13 +1,13 @@
 [package]
 name = "actix-multiresponse"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 authors = ["Tobias de Bruijn <t.debruijn@array21.dev>"]
 description = "actix-multiresponse intents to allow supporting multiple response/request data formats depending on the Content-Type and Accept headers"
 readme = "README.md"
 repository = "https://github.com/TobiasDeBruijn/actix-multiresponse"
 license = "MIT OR Apache-2.0"
-keywords = ["actix", "protobuf", "json", "serde"]
+keywords = ["actix", "protobuf", "json", "serde", "xml"]
 categories = ["encoding", "web-programming"]
 
 [features]
