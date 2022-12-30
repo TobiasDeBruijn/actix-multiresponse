@@ -9,6 +9,7 @@ repository = "https://github.com/TobiasDeBruijn/actix-multiresponse"
 license = "MIT OR Apache-2.0"
 keywords = ["actix", "protobuf", "json", "serde", "xml"]
 categories = ["encoding", "web-programming"]
+documentation = "https://docs.rs/actix-multiresponse/latest/actix_multiresponse/"
 
 [features]
 default = ["json", "protobuf"]
