@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1
+- Fix: Make `ContentType` pub
+
 ## 0.4.0
 - Removed actix-protobuf dependency
 - Dropped support for Paperclip

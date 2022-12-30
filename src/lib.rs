@@ -27,7 +27,7 @@
 //! ```
 
 use crate::error::PayloadError;
-use crate::headers::ContentType;
+pub use crate::headers::ContentType;
 
 use actix_web::body::BoxBody;
 use actix_web::{FromRequest, HttpRequest, HttpResponse, Responder};
@@ -252,7 +252,7 @@ impl<T: ProtobufSupport + SerdeSupportDeserialize + Default + Clone> Payload<T> 
             #[cfg(feature = "xml")]
             ContentType::Xml => {
                 let payload: T = quick_xml::de::from_reader(body)?;
-                Ok(Self(payload))
+                Ok(Self(payload) )
             }
             ContentType::Other => Err(DeserializeError::Undeserializable)
         }
